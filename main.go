@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -129,12 +129,12 @@ func (app *App) repositionImage() {
 	app.sourceImageOp.GeoM.Translate(float64(app.screenW), float64(app.screenH))
 }
 
+func (app *App) drawImage(target *ebiten.Image) {
+}
+
 func (app *App) Draw(screen *ebiten.Image) {
 	if app.sourceImage != nil {
 		imgW, imgH := app.sourceImage.Size()
-		app.sourceImageOp.Uniforms["DevalueIntensity"] = app.devalueIntensity
-		app.sourceImageOp.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
-
 		screen.DrawRectShader(imgW, imgH, app.devalueShader, &app.sourceImageOp)
 	}
 
@@ -171,6 +171,78 @@ func (app *App) guiOpenImage() {
 	}
 }
 
+func (app *App) setUniforms(op *ebiten.DrawRectShaderOptions) {
+	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
+	op.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
+}
+
+func (app *App) exportImage(filename string) error {
+	log.Info().Str("file", filename).Msg("Export")
+
+	imageFile, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("create output file: %w", err)
+	}
+
+	defer imageFile.Close()
+
+	imgW, imgH := app.sourceImage.Size()
+
+	postprocessed := ebiten.NewImage(imgW, imgH)
+
+	op := &ebiten.DrawRectShaderOptions{}
+	op.Uniforms = make(map[string]any)
+	app.setUniforms(op)
+	op.Images[0] = app.sourceImage
+
+	postprocessed.DrawRectShader(imgW, imgH, app.devalueShader, op)
+
+	rawImage := postprocessed.SubImage(postprocessed.Bounds())
+
+	err = png.Encode(imageFile, rawImage)
+	if err != nil {
+		return fmt.Errorf("encode image: %w", err)
+	}
+
+	return nil
+}
+
+func (app *App) guiExportImage() {
+	app.guiFileError = ""
+
+	if app.sourceImage == nil {
+		app.guiFileError = "No image to export yet"
+		log.Error().Msg("No image to export yet")
+		return
+	}
+
+	log.Info().Msg("Selecting export destination")
+
+	filename, err := zenity.SelectFileSave(
+		zenity.Filename(app.sourceImageFilename),
+		zenity.ConfirmOverwrite(),
+		zenity.FileFilters{
+			{"PNG", []string{"*.png"}, true},
+		},
+	)
+
+	if err == zenity.ErrCanceled {
+		log.Info().Msg("Export image dialog canceled")
+		return
+	}
+
+	if err != nil {
+		log.Err(err).Msg("Select image export destination")
+		return
+	}
+
+	err = app.exportImage(filename)
+	if err != nil {
+		app.guiFileError = err.Error()
+		log.Err(err).Str("filename", filename).Msg("Export image")
+	}
+}
+
 func (app *App) Update() error {
 	app.mgr.Update(1.0 / 60.0)
 	app.mgr.BeginFrame()
@@ -195,24 +267,7 @@ func (app *App) Update() error {
 	imgui.SameLine()
 
 	if imgui.Button("Export") {
-		log.Info().Msg("Selecting export destination")
-
-		filename, err := zenity.SelectFileSave(
-			zenity.Filename(app.sourceImageFilename),
-			zenity.ConfirmOverwrite(),
-			zenity.FileFilters{
-				{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
-				{"PNG", []string{"*.png"}, true},
-			},
-		)
-
-		if err == zenity.ErrCanceled {
-			log.Info().Msg("Open image dialog canceled")
-		} else if err != nil {
-			log.Err(err).Msg("Select image file to open")
-		} else {
-			log.Info().Str("file", filename).Msg("Export")
-		}
+		app.guiExportImage()
 	}
 
 	imgui.Separator()
@@ -223,6 +278,8 @@ func (app *App) Update() error {
 	imgui.SliderFloat("Target value", &app.devalueTargetValue, 0.0, 1.0)
 
 	app.mgr.EndFrame()
+
+	app.setUniforms(&app.sourceImageOp)
 	return nil
 }
 

@@ -244,6 +244,10 @@ func (app *App) guiExportImage() {
 		return
 	}
 
+	if filepath.Ext(filename) == "" {
+		filename += ".png"
+	}
+
 	err = app.exportImage(filename)
 	if err != nil {
 		app.guiFileError = err.Error()

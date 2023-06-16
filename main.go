@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	// resources "github.com/hajimehoshi/ebiten/v2/examples/resources/images/shader"
-	//"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/gabstv/ebiten-imgui/renderer"
 	"github.com/inkyblackness/imgui-go/v4"
@@ -29,9 +26,6 @@ const (
 	defaultWindowTitle  = "Image Devalue"
 )
 
-//go:embed devalue_shader.go
-var devalueShaderSrc []byte
-
 type App struct {
 	sourceImage         *ebiten.Image
 	sourceImageOp       ebiten.DrawRectShaderOptions
@@ -43,35 +37,37 @@ type App struct {
 
 	screenW, screenH int
 
-	devalueShader      *ebiten.Shader
-	devalueIntensity   float32
-	devalueTargetValue float32
-	devalueGamma       float32
+	currentEffect int32
+	effects       []*ebiten.Shader
+	effectParams  []EffectParams
+
+	Intensity   float32
+	TargetValue float32
+	Gamma       float32
 }
 
 func NewApp() (*App, error) {
-	shader, err := ebiten.NewShader(devalueShaderSrc)
-	if err != nil {
-		return nil, fmt.Errorf("compile devalue shader: %w", err)
+	app := &App{
+		effects:      make([]*ebiten.Shader, len(effectInfos)),
+		effectParams: make([]EffectParams, len(effectInfos)),
 	}
 
-	mgr := renderer.New(nil)
-	mgr.SetText("Image devalue")
+	for i := range effectInfos {
+		shader, err := ebiten.NewShader(effectInfos[i].ShaderSrc)
+		if err != nil {
+			return nil, fmt.Errorf("compile '%v' shader: %w", effectInfos[i].Name, err)
+		}
 
-	op := ebiten.DrawRectShaderOptions{}
-	op.Uniforms = make(map[string]any)
+		app.effects[i] = shader
+		app.effectParams[i] = effectInfos[i].NewParamsFunc()
+	}
 
-	return &App{
-		sourceImage:         nil,
-		sourceImageOp:       op,
-		sourceImageFilename: "",
+	app.mgr = renderer.New(nil)
 
-		mgr: mgr,
+	app.sourceImageOp = ebiten.DrawRectShaderOptions{}
+	app.sourceImageOp.Uniforms = make(map[string]any)
 
-		devalueShader:      shader,
-		devalueIntensity:   0.0,
-		devalueTargetValue: 0.5,
-	}, nil
+	return app, nil
 }
 
 func (app *App) loadImage(filename string) error {
@@ -131,13 +127,10 @@ func (app *App) repositionImage() {
 	app.sourceImageOp.GeoM.Translate(float64(app.screenW), float64(app.screenH))
 }
 
-func (app *App) drawImage(target *ebiten.Image) {
-}
-
 func (app *App) Draw(screen *ebiten.Image) {
 	if app.sourceImage != nil {
 		imgW, imgH := app.sourceImage.Size()
-		screen.DrawRectShader(imgW, imgH, app.devalueShader, &app.sourceImageOp)
+		screen.DrawRectShader(imgW, imgH, app.effects[int(app.currentEffect)], &app.sourceImageOp)
 	}
 
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %.2f\nFPS: %.2f", ebiten.CurrentTPS(), ebiten.CurrentFPS()))
@@ -174,12 +167,6 @@ func (app *App) guiOpenImage() {
 	}
 }
 
-func (app *App) setUniforms(op *ebiten.DrawRectShaderOptions) {
-	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
-	op.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
-	op.Uniforms["Gamma"] = app.devalueGamma
-}
-
 func (app *App) exportImage(filename string) error {
 	log.Info().Str("file", filename).Msg("Export")
 
@@ -196,10 +183,10 @@ func (app *App) exportImage(filename string) error {
 
 	op := &ebiten.DrawRectShaderOptions{}
 	op.Uniforms = make(map[string]any)
-	app.setUniforms(op)
+	SetUniforms(app.effectParams[int(app.currentEffect)], op)
 	op.Images[0] = app.sourceImage
 
-	postprocessed.DrawRectShader(imgW, imgH, app.devalueShader, op)
+	postprocessed.DrawRectShader(imgW, imgH, app.effects[int(app.currentEffect)], op)
 
 	rawImage := postprocessed.SubImage(postprocessed.Bounds())
 
@@ -286,15 +273,18 @@ func (app *App) Update() error {
 
 	imgui.Separator()
 	imgui.Bullet()
-	imgui.Text("Devalue options")
+	imgui.Text("Transform")
 
-	imgui.SliderFloat("Intensity", &app.devalueIntensity, 0.0, 1.0)
-	imgui.SliderFloat("Target value", &app.devalueTargetValue, 0.0, 1.0)
-	imgui.SliderFloat("Gamma correction", &app.devalueGamma, 0.0, 4.0)
+	imgui.Combo("Effect", &app.currentEffect, effectNames)
+
+	sliders := app.effectParams[int(app.currentEffect)].Sliders()
+	for i := range sliders {
+		imgui.SliderFloat(sliders[i].Title, sliders[i].Target, sliders[i].Min, sliders[i].Max)
+	}
 
 	app.mgr.EndFrame()
 
-	app.setUniforms(&app.sourceImageOp)
+	SetUniforms(app.effectParams[int(app.currentEffect)], &app.sourceImageOp)
 	return nil
 }
 

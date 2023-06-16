@@ -7,6 +7,7 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"os"
+	"path/filepath"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -218,8 +219,14 @@ func (app *App) guiExportImage() {
 
 	log.Info().Msg("Selecting export destination")
 
+	preferredDir := filepath.Dir(os.Args[0])
+	wd, err := os.Getwd()
+	if err != nil {
+		preferredDir = wd
+	}
+
 	filename, err := zenity.SelectFileSave(
-		zenity.Filename(app.sourceImageFilename),
+		zenity.Filename(filepath.Join(preferredDir, "devalued_export")),
 		zenity.ConfirmOverwrite(),
 		zenity.FileFilters{
 			{"PNG", []string{"*.png"}, true},

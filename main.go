@@ -35,6 +35,8 @@ type App struct {
 	sourceImage *ebiten.Image
 	mgr         *renderer.Manager
 
+	winW, winH int
+
 	devalueShader      *ebiten.Shader
 	devalueIntensity   float32
 	devalueTargetValue float32
@@ -82,9 +84,23 @@ func (app *App) Draw(screen *ebiten.Image) {
 	screenW, screenH := screen.Size()
 	imgW, imgH := app.sourceImage.Size()
 
+	ratioX := float64(screenW) / float64(imgW)
+	ratioY := float64(screenH) / float64(imgH)
+
+	fitInsideRatio := 1.0
+	if ratioX < 1.0 {
+		fitInsideRatio = ratioX
+	}
+
+	if ratioY < fitInsideRatio {
+		fitInsideRatio = ratioY
+	}
+
 	op := ebiten.DrawRectShaderOptions{}
 	op.GeoM.Reset()
-	op.GeoM.Scale(float64(screenW)/float64(imgW), float64(screenH)/float64(imgH))
+	op.GeoM.Translate(-float64(imgW), -float64(imgH))
+	op.GeoM.Scale(fitInsideRatio, fitInsideRatio)
+	op.GeoM.Translate(float64(screenW), float64(screenH))
 
 	op.Uniforms = make(map[string]any)
 	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
@@ -130,7 +146,13 @@ func (app *App) Update() error {
 }
 
 func (app *App) Layout(outsideW, outsideH int) (int, int) {
-	app.mgr.SetDisplaySize(float32(outsideW), float32(outsideH))
+	if app.winW != outsideW || app.winH != outsideH {
+		log.Info().Int("newW", outsideW).Int("newH", outsideH).Msg("Window resized")
+		app.winW, app.winH = outsideW, outsideH
+
+		app.mgr.SetDisplaySize(float32(outsideW), float32(outsideH))
+	}
+
 	return outsideW, outsideH
 }
 

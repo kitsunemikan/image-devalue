@@ -36,6 +36,8 @@ type App struct {
 	sourceImageOp       ebiten.DrawRectShaderOptions
 	sourceImageFilename string
 
+	guiFileError string
+
 	mgr *renderer.Manager
 
 	screenW, screenH int
@@ -71,8 +73,11 @@ func NewApp() (*App, error) {
 }
 
 func (app *App) loadImage(filename string) error {
+	app.guiFileError = ""
+
 	imageFile, err := os.Open(filename)
 	if err != nil {
+		app.guiFileError = err.Error()
 		return fmt.Errorf("open image: %w", err)
 	}
 
@@ -80,6 +85,7 @@ func (app *App) loadImage(filename string) error {
 
 	rawImage, imgFmt, err := image.Decode(imageFile)
 	if err != nil {
+		app.guiFileError = err.Error()
 		return fmt.Errorf("decode default image '%s': %w", filename, err)
 	}
 
@@ -172,7 +178,15 @@ func (app *App) Update() error {
 	imgui.Bullet()
 	imgui.Text("File")
 
-	imgui.Text(app.sourceImageFilename)
+	if app.guiFileError != "" {
+		imgui.PushStyleColor(imgui.StyleColorText, imgui.Vec4{1.0, 0.3, 0.3, 1.0})
+		imgui.Text(app.guiFileError)
+		imgui.PopStyleColor()
+	} else if app.sourceImageFilename == "" {
+		imgui.Text("Please, open an image")
+	} else {
+		imgui.Text(app.sourceImageFilename)
+	}
 
 	if imgui.Button("Open") {
 		app.guiOpenImage()

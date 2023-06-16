@@ -7,6 +7,7 @@ package main
 var (
 	DevalueIntensity   float
 	DevalueTargetValue float
+	Gamma              float
 )
 
 // Ported from https://stackoverflow.com/a/6930407
@@ -133,9 +134,17 @@ func hsv2rgb(in vec3) vec3 {
 func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
 	clr := imageSrc0At(texCoord)
 
-	hsv := rgb2hsv(clr.rgb)
-	hsv.z = hsv.z*(1.0-DevalueIntensity) + DevalueTargetValue*DevalueIntensity
+	/*
+		hsv := rgb2hsv(clr.rgb)
+		hsv.z = hsv.z*(1.0-DevalueIntensity) + DevalueTargetValue*DevalueIntensity
 
-	newColor := hsv2rgb(hsv)
-	return vec4(newColor, clr.a)
+		newColor := hsv2rgb(hsv)
+		return vec4(newColor, clr.a)
+	*/
+
+	colorSum := 0.2126*pow(clr.r, Gamma) + 0.7152*pow(clr.g, Gamma) + 0.0722*pow(clr.b, Gamma)
+	r := 1 - pow(DevalueTargetValue/colorSum, 1.0/Gamma)
+
+	clr.rgb -= r * DevalueIntensity * clr.rgb
+	return clr
 }

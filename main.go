@@ -46,6 +46,7 @@ type App struct {
 	devalueShader      *ebiten.Shader
 	devalueIntensity   float32
 	devalueTargetValue float32
+	devalueGamma       float32
 }
 
 func NewApp() (*App, error) {
@@ -176,6 +177,7 @@ func (app *App) guiOpenImage() {
 func (app *App) setUniforms(op *ebiten.DrawRectShaderOptions) {
 	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
 	op.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
+	op.Uniforms["Gamma"] = app.devalueGamma
 }
 
 func (app *App) exportImage(filename string) error {
@@ -288,6 +290,7 @@ func (app *App) Update() error {
 
 	imgui.SliderFloat("Intensity", &app.devalueIntensity, 0.0, 1.0)
 	imgui.SliderFloat("Target value", &app.devalueTargetValue, 0.0, 1.0)
+	imgui.SliderFloat("Gamma correction", &app.devalueGamma, 0.0, 4.0)
 
 	app.mgr.EndFrame()
 

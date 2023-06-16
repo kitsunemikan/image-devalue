@@ -150,8 +150,9 @@ func (app *App) guiOpenImage() {
 	filename, err := zenity.SelectFile(
 		zenity.Filename(app.sourceImageFilename),
 		zenity.FileFilters{
-			{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
-			{"PNG", []string{"*.png"}, true},
+			{"JPEG (*.jpg, *.jpeg, *.jpe, *.jfif)", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
+			{"PNG (*.png)", []string{"*.png"}, true},
+			{"All files", []string{"*"}, true},
 		},
 	)
 

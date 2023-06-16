@@ -9,9 +9,12 @@ import (
 	_ "image/png"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	//"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	// resources "github.com/hajimehoshi/ebiten/v2/examples/resources/images/shader"
 	//"github.com/hajimehoshi/ebiten/v2/inpututil"
+
+	"github.com/gabstv/ebiten-imgui/renderer"
+	"github.com/inkyblackness/imgui-go/v4"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,6 +30,7 @@ const (
 
 type App struct {
 	sourceImage *ebiten.Image
+	mgr         *renderer.Manager
 }
 
 func NewApp() (*App, error) {
@@ -48,8 +52,12 @@ func NewApp() (*App, error) {
 		Msg("Loaded default image")
 
 	sourceImage := ebiten.NewImageFromImage(defaultImg)
+
+	mgr := renderer.New(nil)
+
 	return &App{
 		sourceImage: sourceImage,
+		mgr:         mgr,
 	}, nil
 }
 
@@ -62,13 +70,29 @@ func (app *App) Draw(screen *ebiten.Image) {
 	op.GeoM.Scale(float64(screenW)/float64(imgW), float64(screenH)/float64(imgH))
 
 	screen.DrawImage(app.sourceImage, &op)
+
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %.2f\nFPS: %.2f", ebiten.CurrentTPS(), ebiten.CurrentFPS()))
+
+	app.mgr.Draw(screen)
 }
 
 func (app *App) Update() error {
+	app.mgr.Update(1.0 / 60.0)
+	app.mgr.BeginFrame()
+
+	imgui.Text("Image Devalue")
+
+	if imgui.Button("Press me!") {
+		log.Info().Msg("Button pressed")
+	}
+
+	app.mgr.EndFrame()
+
 	return nil
 }
 
 func (app *App) Layout(outsideW, outsideH int) (int, int) {
+	app.mgr.SetDisplaySize(float32(outsideW), float32(outsideH))
 	return outsideW, outsideH
 }
 

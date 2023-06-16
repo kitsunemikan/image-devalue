@@ -3,7 +3,9 @@ module github.com/kitsunemikan/image-devalue
 go 1.18
 
 require (
+	github.com/gabstv/ebiten-imgui v0.5.0
 	github.com/hajimehoshi/ebiten/v2 v2.5.4
+	github.com/inkyblackness/imgui-go/v4 v4.7.0
 	github.com/rs/zerolog v1.29.1
 )
 

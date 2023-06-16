@@ -18,6 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	"github.com/ncruces/zenity"
 )
 
 const (
@@ -32,8 +34,10 @@ const (
 var devalueShaderSrc []byte
 
 type App struct {
-	sourceImage *ebiten.Image
-	mgr         *renderer.Manager
+	sourceImage          *ebiten.Image
+	currentImageFilename string
+
+	mgr *renderer.Manager
 
 	winW, winH int
 
@@ -65,14 +69,17 @@ func NewApp() (*App, error) {
 		Str("format", imgFmt).
 		Msg("Loaded default image")
 
+	currentImageFilename := defaultImagePath
 	sourceImage := ebiten.NewImageFromImage(defaultImg)
 
 	mgr := renderer.New(nil)
 	mgr.SetText("Image devalue")
 
 	return &App{
-		sourceImage: sourceImage,
-		mgr:         mgr,
+		sourceImage:          sourceImage,
+		currentImageFilename: currentImageFilename,
+
+		mgr: mgr,
 
 		devalueShader:      shader,
 		devalueIntensity:   0.0,
@@ -122,16 +129,49 @@ func (app *App) Update() error {
 	imgui.Bullet()
 	imgui.Text("File")
 
-	imgui.Text("Current: " + defaultImagePath)
+	imgui.Text("Current: " + app.currentImageFilename)
 
 	if imgui.Button("Open") {
-		log.Info().Msg("Open button pressed")
+		log.Info().Msg("Selecting image to open")
+
+		filename, err := zenity.SelectFile(
+			zenity.Filename(app.currentImageFilename),
+			zenity.FileFilters{
+				{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
+				{"PNG", []string{"*.png"}, true},
+			},
+		)
+
+		if err == zenity.ErrCanceled {
+			log.Info().Msg("Open image dialog canceled")
+		} else if err != nil {
+			log.Err(err).Msg("Select image file to open")
+		} else {
+			app.currentImageFilename = filename
+		}
 	}
 
 	imgui.SameLine()
 
 	if imgui.Button("Export") {
-		log.Info().Msg("Export requested")
+		log.Info().Msg("Selecting export destination")
+
+		filename, err := zenity.SelectFileSave(
+			zenity.Filename(app.currentImageFilename),
+			zenity.ConfirmOverwrite(),
+			zenity.FileFilters{
+				{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
+				{"PNG", []string{"*.png"}, true},
+			},
+		)
+
+		if err == zenity.ErrCanceled {
+			log.Info().Msg("Open image dialog canceled")
+		} else if err != nil {
+			log.Err(err).Msg("Select image file to open")
+		} else {
+			log.Info().Str("file", filename).Msg("Export")
+		}
 	}
 
 	imgui.Separator()

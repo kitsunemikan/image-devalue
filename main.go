@@ -1,12 +1,12 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"image"
-	"os"
-
 	_ "image/jpeg"
 	_ "image/png"
+	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -28,15 +28,24 @@ const (
 	defaultImagePath = "test_image.jpg"
 )
 
+//go:embed devalue_shader.go
+var devalueShaderSrc []byte
+
 type App struct {
 	sourceImage *ebiten.Image
 	mgr         *renderer.Manager
 
+	devalueShader      *ebiten.Shader
 	devalueIntensity   float32
 	devalueTargetValue float32
 }
 
 func NewApp() (*App, error) {
+	shader, err := ebiten.NewShader(devalueShaderSrc)
+	if err != nil {
+		return nil, fmt.Errorf("compile devalue shader: %w", err)
+	}
+
 	defaultImgFile, err := os.Open(defaultImagePath)
 	if err != nil {
 		return nil, fmt.Errorf("open default image: %w", err)
@@ -63,6 +72,7 @@ func NewApp() (*App, error) {
 		sourceImage: sourceImage,
 		mgr:         mgr,
 
+		devalueShader:      shader,
 		devalueIntensity:   0.0,
 		devalueTargetValue: 0.5,
 	}, nil
@@ -72,11 +82,17 @@ func (app *App) Draw(screen *ebiten.Image) {
 	screenW, screenH := screen.Size()
 	imgW, imgH := app.sourceImage.Size()
 
-	op := ebiten.DrawImageOptions{}
+	op := ebiten.DrawRectShaderOptions{}
 	op.GeoM.Reset()
 	op.GeoM.Scale(float64(screenW)/float64(imgW), float64(screenH)/float64(imgH))
 
-	screen.DrawImage(app.sourceImage, &op)
+	op.Uniforms = make(map[string]any)
+	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
+	op.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
+
+	op.Images[0] = app.sourceImage
+
+	screen.DrawRectShader(imgW, imgH, app.devalueShader, &op)
 
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %.2f\nFPS: %.2f", ebiten.CurrentTPS(), ebiten.CurrentFPS()))
 
@@ -106,7 +122,7 @@ func (app *App) Update() error {
 	imgui.Bullet()
 	imgui.Text("Devalue options")
 
-	imgui.SliderFloat("Intensity", &app.devalueIntensity, 0.0, 100.0)
+	imgui.SliderFloat("Intensity", &app.devalueIntensity, 0.0, 1.0)
 	imgui.SliderFloat("Target value", &app.devalueTargetValue, 0.0, 1.0)
 
 	app.mgr.EndFrame()

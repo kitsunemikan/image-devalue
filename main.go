@@ -12,6 +12,9 @@ import (
 	//"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	// resources "github.com/hajimehoshi/ebiten/v2/examples/resources/images/shader"
 	//"github.com/hajimehoshi/ebiten/v2/inpututil"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -34,10 +37,15 @@ func NewApp() (*App, error) {
 
 	defer defaultImgFile.Close()
 
-	defaultImg, _, err := image.Decode(defaultImgFile)
+	defaultImg, imgFmt, err := image.Decode(defaultImgFile)
 	if err != nil {
 		return nil, fmt.Errorf("decode default image '%s': %w", defaultImagePath, err)
 	}
+
+	log.Info().
+		Str("filepath", defaultImagePath).
+		Str("format", imgFmt).
+		Msg("Loaded default image")
 
 	sourceImage := ebiten.NewImageFromImage(defaultImg)
 	return &App{
@@ -65,18 +73,24 @@ func (app *App) Layout(outsideW, outsideH int) (int, int) {
 }
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	ebiten.SetWindowSize(defaultWindowWidth, defaultWindowHeight)
 	ebiten.SetWindowTitle(defaultWindowTitle)
 	ebiten.SetWindowResizable(true)
 
 	app, err := NewApp()
 	if err != nil {
-		fmt.Printf("error: init application: %v", err)
+		log.Fatal().
+			Err(err).
+			Msg("Initialize application")
 		os.Exit(1)
 	}
 
 	if err := ebiten.RunGame(app); err != nil {
-		fmt.Printf("error: run app: %v", err)
+		log.Fatal().
+			Err(err).
+			Msg("Run app")
 		os.Exit(1)
 	}
 }

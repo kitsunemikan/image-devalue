@@ -31,6 +31,9 @@ const (
 type App struct {
 	sourceImage *ebiten.Image
 	mgr         *renderer.Manager
+
+	devalueIntensity   float32
+	devalueTargetValue float32
 }
 
 func NewApp() (*App, error) {
@@ -54,10 +57,14 @@ func NewApp() (*App, error) {
 	sourceImage := ebiten.NewImageFromImage(defaultImg)
 
 	mgr := renderer.New(nil)
+	mgr.SetText("Image devalue")
 
 	return &App{
 		sourceImage: sourceImage,
 		mgr:         mgr,
+
+		devalueIntensity:   0.0,
+		devalueTargetValue: 0.5,
 	}, nil
 }
 
@@ -80,14 +87,29 @@ func (app *App) Update() error {
 	app.mgr.Update(1.0 / 60.0)
 	app.mgr.BeginFrame()
 
-	imgui.Text("Image Devalue")
+	imgui.Bullet()
+	imgui.Text("File")
 
-	if imgui.Button("Press me!") {
-		log.Info().Msg("Button pressed")
+	imgui.Text("Current: " + defaultImagePath)
+
+	if imgui.Button("Open") {
+		log.Info().Msg("Open button pressed")
 	}
 
-	app.mgr.EndFrame()
+	imgui.SameLine()
 
+	if imgui.Button("Export") {
+		log.Info().Msg("Export requested")
+	}
+
+	imgui.Separator()
+	imgui.Bullet()
+	imgui.Text("Devalue options")
+
+	imgui.SliderFloat("Intensity", &app.devalueIntensity, 0.0, 100.0)
+	imgui.SliderFloat("Target value", &app.devalueTargetValue, 0.0, 1.0)
+
+	app.mgr.EndFrame()
 	return nil
 }
 

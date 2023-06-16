@@ -26,20 +26,19 @@ const (
 	defaultWindowWidth  = 800
 	defaultWindowHeight = 600
 	defaultWindowTitle  = "Image Devalue"
-
-	defaultImagePath = "test_image.jpg"
 )
 
 //go:embed devalue_shader.go
 var devalueShaderSrc []byte
 
 type App struct {
-	sourceImage          *ebiten.Image
-	currentImageFilename string
+	sourceImage         *ebiten.Image
+	sourceImageOp       ebiten.DrawRectShaderOptions
+	sourceImageFilename string
 
 	mgr *renderer.Manager
 
-	winW, winH int
+	screenW, screenH int
 
 	devalueShader      *ebiten.Shader
 	devalueIntensity   float32
@@ -52,32 +51,16 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("compile devalue shader: %w", err)
 	}
 
-	defaultImgFile, err := os.Open(defaultImagePath)
-	if err != nil {
-		return nil, fmt.Errorf("open default image: %w", err)
-	}
-
-	defer defaultImgFile.Close()
-
-	defaultImg, imgFmt, err := image.Decode(defaultImgFile)
-	if err != nil {
-		return nil, fmt.Errorf("decode default image '%s': %w", defaultImagePath, err)
-	}
-
-	log.Info().
-		Str("filepath", defaultImagePath).
-		Str("format", imgFmt).
-		Msg("Loaded default image")
-
-	currentImageFilename := defaultImagePath
-	sourceImage := ebiten.NewImageFromImage(defaultImg)
-
 	mgr := renderer.New(nil)
 	mgr.SetText("Image devalue")
 
+	op := ebiten.DrawRectShaderOptions{}
+	op.Uniforms = make(map[string]any)
+
 	return &App{
-		sourceImage:          sourceImage,
-		currentImageFilename: currentImageFilename,
+		sourceImage:         nil,
+		sourceImageOp:       op,
+		sourceImageFilename: "",
 
 		mgr: mgr,
 
@@ -87,12 +70,43 @@ func NewApp() (*App, error) {
 	}, nil
 }
 
-func (app *App) Draw(screen *ebiten.Image) {
-	screenW, screenH := screen.Size()
+func (app *App) loadImage(filename string) error {
+	imageFile, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("open image: %w", err)
+	}
+
+	defer imageFile.Close()
+
+	rawImage, imgFmt, err := image.Decode(imageFile)
+	if err != nil {
+		return fmt.Errorf("decode default image '%s': %w", filename, err)
+	}
+
+	app.sourceImageFilename = filename
+
+	app.sourceImage = ebiten.NewImageFromImage(rawImage)
+	app.sourceImageOp.Images[0] = app.sourceImage
+
+	app.repositionImage()
+
+	log.Info().
+		Str("filepath", filename).
+		Str("format", imgFmt).
+		Msg("Loaded new image")
+
+	return nil
+}
+
+func (app *App) repositionImage() {
+	if app.sourceImage == nil {
+		return
+	}
+
 	imgW, imgH := app.sourceImage.Size()
 
-	ratioX := float64(screenW) / float64(imgW)
-	ratioY := float64(screenH) / float64(imgH)
+	ratioX := float64(app.screenW) / float64(imgW)
+	ratioY := float64(app.screenH) / float64(imgH)
 
 	fitInsideRatio := 1.0
 	if ratioX < 1.0 {
@@ -103,23 +117,52 @@ func (app *App) Draw(screen *ebiten.Image) {
 		fitInsideRatio = ratioY
 	}
 
-	op := ebiten.DrawRectShaderOptions{}
-	op.GeoM.Reset()
-	op.GeoM.Translate(-float64(imgW), -float64(imgH))
-	op.GeoM.Scale(fitInsideRatio, fitInsideRatio)
-	op.GeoM.Translate(float64(screenW), float64(screenH))
+	app.sourceImageOp.GeoM.Reset()
+	app.sourceImageOp.GeoM.Translate(-float64(imgW), -float64(imgH))
+	app.sourceImageOp.GeoM.Scale(fitInsideRatio, fitInsideRatio)
+	app.sourceImageOp.GeoM.Translate(float64(app.screenW), float64(app.screenH))
+}
 
-	op.Uniforms = make(map[string]any)
-	op.Uniforms["DevalueIntensity"] = app.devalueIntensity
-	op.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
+func (app *App) Draw(screen *ebiten.Image) {
+	if app.sourceImage != nil {
+		imgW, imgH := app.sourceImage.Size()
+		app.sourceImageOp.Uniforms["DevalueIntensity"] = app.devalueIntensity
+		app.sourceImageOp.Uniforms["DevalueTargetValue"] = app.devalueTargetValue
 
-	op.Images[0] = app.sourceImage
-
-	screen.DrawRectShader(imgW, imgH, app.devalueShader, &op)
+		screen.DrawRectShader(imgW, imgH, app.devalueShader, &app.sourceImageOp)
+	}
 
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %.2f\nFPS: %.2f", ebiten.CurrentTPS(), ebiten.CurrentFPS()))
 
 	app.mgr.Draw(screen)
+}
+
+func (app *App) guiOpenImage() {
+	log.Info().Msg("Selecting image to open")
+
+	filename, err := zenity.SelectFile(
+		zenity.Filename(app.sourceImageFilename),
+		zenity.FileFilters{
+			{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
+			{"PNG", []string{"*.png"}, true},
+		},
+	)
+
+	if err == zenity.ErrCanceled {
+		log.Info().Msg("Open image dialog canceled")
+		return
+	}
+
+	if err != nil {
+		log.Err(err).Msg("Select image file to open")
+		return
+	}
+
+	err = app.loadImage(filename)
+	if err != nil {
+		log.Err(err).Msg("Open image")
+		return
+	}
 }
 
 func (app *App) Update() error {
@@ -129,26 +172,10 @@ func (app *App) Update() error {
 	imgui.Bullet()
 	imgui.Text("File")
 
-	imgui.Text("Current: " + app.currentImageFilename)
+	imgui.Text(app.sourceImageFilename)
 
 	if imgui.Button("Open") {
-		log.Info().Msg("Selecting image to open")
-
-		filename, err := zenity.SelectFile(
-			zenity.Filename(app.currentImageFilename),
-			zenity.FileFilters{
-				{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
-				{"PNG", []string{"*.png"}, true},
-			},
-		)
-
-		if err == zenity.ErrCanceled {
-			log.Info().Msg("Open image dialog canceled")
-		} else if err != nil {
-			log.Err(err).Msg("Select image file to open")
-		} else {
-			app.currentImageFilename = filename
-		}
+		app.guiOpenImage()
 	}
 
 	imgui.SameLine()
@@ -157,7 +184,7 @@ func (app *App) Update() error {
 		log.Info().Msg("Selecting export destination")
 
 		filename, err := zenity.SelectFileSave(
-			zenity.Filename(app.currentImageFilename),
+			zenity.Filename(app.sourceImageFilename),
 			zenity.ConfirmOverwrite(),
 			zenity.FileFilters{
 				{"JPEG", []string{"*.jpg", "*.jpeg", "*.jpe", "*.jfif"}, true},
@@ -186,11 +213,12 @@ func (app *App) Update() error {
 }
 
 func (app *App) Layout(outsideW, outsideH int) (int, int) {
-	if app.winW != outsideW || app.winH != outsideH {
+	if app.screenW != outsideW || app.screenH != outsideH {
 		log.Info().Int("newW", outsideW).Int("newH", outsideH).Msg("Window resized")
-		app.winW, app.winH = outsideW, outsideH
+		app.screenW, app.screenH = outsideW, outsideH
 
 		app.mgr.SetDisplaySize(float32(outsideW), float32(outsideH))
+		app.repositionImage()
 	}
 
 	return outsideW, outsideH

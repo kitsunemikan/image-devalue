@@ -16,9 +16,9 @@ Additionally, to get true luma I implemented a possibilty to do gamma correction
 
 You can see the results below:
 
-![Different effects in RGB space](https://imgur.com/a/2W8GZjy)
+![readme_rgb_transform](https://github.com/kitsunemikan/image-devalue/assets/108350823/c1410535-4b71-477e-8a40-efdfacc13cc9)
 
-![Different effects in grayscale space](https://imgur.com/a/SY9e4z4)
+![readme_grayscale_transform](https://github.com/kitsunemikan/image-devalue/assets/108350823/54ee1d1f-38a5-409a-81f6-f7f1f5134a5f)
 
 Trying to equate **luma** almost gave a gray image, but still not quite. It's also interesting, since turning image grayscale is like stripping it of **chroma**, but what it's called to strip it of **luma**?
 
@@ -26,7 +26,7 @@ Anyway, at least I got something close to a luma-less image. Would be nice if so
 
 ### App
 
-![App screenshot](https://imgur.com/a/SD8SwjP)
+<img width="655" alt="readme_overview" src="https://github.com/kitsunemikan/image-devalue/assets/108350823/a52d631e-0dda-444f-8587-f7ba01b928c2">
 
 Once again I get proofs for how much I like Go. This project uses Ebiten and GPU shaders to render images, Dear ImGUI library for the UI, Zenity for file selection dialogs, and built-in `image` package for decoding and encoding images. I could harness the power from all of these diverse libraries and make a complete project without the pain and with lots of fun in a span of the afternoon. What a good day...
 
